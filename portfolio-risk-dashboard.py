@@ -78,7 +78,10 @@ else:
 
 # --- PREVIEW ---
 st.subheader("1. Preview of Return Data")
-st.dataframe(df.head())
+
+# Show most recent dates first
+st.dataframe(df.sort_index(ascending=False).head())
+
 
 csv_buffer = io.StringIO()
 df.to_csv(csv_buffer)
