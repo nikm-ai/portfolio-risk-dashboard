@@ -257,11 +257,13 @@ st.markdown('<div class="sec-header">1. Return data preview</div>', unsafe_allow
 st.dataframe(df.sort_index(ascending=False).head(5).rename(columns=display_names),
              use_container_width=True)
 
-st.markdown(r"""<div class="fig-caption">
+st.markdown("""<div class="fig-caption">
   <b>Table 1.</b> Five most recent trading days of daily returns.
-  Each cell represents $r_t = (P_t - P_{t-1}) / P_{t-1}$, the simple daily return for that asset.
-  Returns are used directly for all downstream calculations; no log-return transformation is applied.
+  Each cell represents the simple daily return for that asset,
+  calculated as shown below. Returns are used directly for all downstream
+  calculations; no log-return transformation is applied.
 </div>""", unsafe_allow_html=True)
+st.latex(r"r_t = \frac{P_t - P_{t-1}}{P_{t-1}}")
 
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 2 — PORTFOLIO WEIGHTS (inline, labeled)
@@ -269,33 +271,93 @@ st.markdown(r"""<div class="fig-caption">
 st.markdown('<div class="sec-header">2. Portfolio weights</div>', unsafe_allow_html=True)
 
 st.markdown("""<div class="explainer-body" style="margin-bottom:1rem;">
-  Adjust the weight allocated to each position. Weights are normalized to sum to 100%
-  before any calculation, so only relative magnitudes matter. The default is equal-weight
-  at 5% per stock.
+  Edit the weight column directly. Weights are normalized to sum to 100% before any
+  calculation, so only relative magnitudes matter. The default is equal-weight at 5% per stock.
+  Sort by any column; use the Ticker or Company columns to find positions quickly.
 </div>""", unsafe_allow_html=True)
 
 numeric_df = df.select_dtypes(include=np.number)
 n_assets   = numeric_df.shape[1]
 tickers_in = list(numeric_df.columns)
 
-raw_weights = {}
-cols_per_row = 5
-ticker_rows  = [tickers_in[i:i+cols_per_row] for i in range(0, n_assets, cols_per_row)]
+# Build editable weight dataframe
+weight_init = pd.DataFrame({
+    "Ticker":  tickers_in,
+    "Company": [NAMES.get(t, t) for t in tickers_in],
+    "Weight":  [5.0] * n_assets,
+})
 
-for row_tickers in ticker_rows:
-    cols = st.columns(len(row_tickers))
-    for col, ticker in zip(cols, row_tickers):
-        label = NAMES.get(ticker, ticker)
-        raw_weights[ticker] = col.number_input(
-            f"{label} ({ticker})", value=5.0, min_value=0.0, max_value=100.0,
-            step=1.0, key=f"w_{ticker}"
-        )
+wt_col, bar_col = st.columns([1, 1])
 
-weight_arr = np.array([raw_weights[t] for t in tickers_in])
-if weight_arr.sum() == 0:
+with wt_col:
+    edited = st.data_editor(
+        weight_init,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Ticker", "Company"],
+        column_config={
+            "Ticker":  st.column_config.TextColumn("Ticker", width="small"),
+            "Company": st.column_config.TextColumn("Company", width="medium"),
+            "Weight":  st.column_config.NumberColumn(
+                "Weight", min_value=0.0, max_value=100.0,
+                step=0.5, format="%.1f", width="small"
+            ),
+        },
+        key="weight_editor",
+    )
+
+raw_weights_arr = edited["Weight"].values.astype(float)
+if raw_weights_arr.sum() == 0:
     st.error("All weights are zero.")
     st.stop()
-weights = weight_arr / weight_arr.sum()
+weights = raw_weights_arr / raw_weights_arr.sum()
+
+with bar_col:
+    # Live allocation donut / bar
+    sorted_idx = np.argsort(weights)[::-1]
+    sorted_names  = [NAMES.get(tickers_in[i], tickers_in[i]) for i in sorted_idx]
+    sorted_weights = weights[sorted_idx] * 100
+
+    # Color palette cycling through brand palette
+    bar_colors = [BLUE, LBLUE, GREEN, LGREEN, LRED, RED, "#c47a00", LLBLUE,
+                  "#6ab06a", "#3d7ab5", "#b94040", "#888888", "#c8a86e",
+                  "#5a8a5a", "#8a5a5a", "#5a5a8a", "#8a8a5a", "#5a8a8a",
+                  "#8a5a8a", "#aaaaaa"]
+    colors_used = [bar_colors[i % len(bar_colors)] for i in range(len(sorted_names))]
+
+    fig_alloc = go.Figure(go.Bar(
+        x=sorted_weights,
+        y=sorted_names,
+        orientation="h",
+        marker_color=colors_used,
+        opacity=0.82,
+        text=[f"{w:.1f}%" for w in sorted_weights],
+        textposition="outside",
+        textfont=dict(size=9, color="#333"),
+        hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
+    ))
+    fig_alloc.add_vline(x=100/n_assets, line_dash="dot",
+                        line_color=GRAY, line_width=1,
+                        annotation_text="Equal weight",
+                        annotation_font=dict(size=9, color=GRAY),
+                        annotation_position="top right")
+    fig_alloc.update_layout(
+        **{**BASE, "margin": dict(l=8, r=50, t=10, b=8)},
+        height=max(300, n_assets * 22),
+        xaxis=dict(**ax("Normalized weight (%)"), ticksuffix="%"),
+        yaxis=dict(tickfont=dict(size=10, color="#444"),
+                   showgrid=False, linecolor="#d4c9b8", linewidth=1,
+                   autorange="reversed"),
+        showlegend=False,
+    )
+    st.plotly_chart(fig_alloc, use_container_width=True)
+
+st.markdown("""<div class="fig-caption">
+  <b>Figure 0.</b> Normalized portfolio allocation after weight adjustment.
+  The dotted line marks the equal-weight threshold. Positions to the right are
+  overweight relative to equal-weight; positions to the left are underweight.
+  The chart updates immediately when weights are changed in the table.
+</div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════
 # CORE CALCULATIONS
@@ -540,14 +602,20 @@ st.plotly_chart(fig_dist, use_container_width=True)
 
 skew_val = float(port_returns.skew())
 kurt_val = float(port_returns.kurtosis())  # excess kurtosis
+skew_desc = 'slight left tail' if skew_val < -0.1 else 'slight right tail' if skew_val > 0.1 else 'approximately symmetric'
+kurt_note = (
+    f"Excess kurtosis of {kurt_val:.2f} is very high; over a one-year window this "
+    f"is typically driven by one or two extreme return days rather than a structurally "
+    f"fat-tailed distribution. Moment estimates should be interpreted cautiously."
+    if kurt_val > 5 else
+    f"Excess kurtosis of {kurt_val:.2f} indicates "
+    f"{'mildly fat tails relative to a normal distribution' if kurt_val > 0.5 else 'near-normal tail behavior'}."
+)
 st.markdown(f"""<div class="fig-caption">
   <b>Figure 2.</b> Daily return distribution for the portfolio (blue) and S&P 500 (red), with
-  Gaussian KDE overlay (Silverman bandwidth). The portfolio daily mean is {port_returns.mean():.4%}
-  with a standard deviation of {port_returns.std():.4%}. Skewness is {skew_val:.3f}
-  ({'slight left tail' if skew_val < -0.1 else 'slight right tail' if skew_val > 0.1 else 'approximately symmetric'})
-  and excess kurtosis is {kurt_val:.3f}
-  ({'fat tails relative to a normal distribution, consistent with equity return stylized facts' if kurt_val > 0.5 else 'near-normal tail behavior'}).
-  The dashed red line marks the empirical 95% VaR.
+  Gaussian KDE overlay (Silverman bandwidth). The portfolio daily mean is {port_returns.mean():.3%}
+  with a standard deviation of {port_returns.std():.3%}. Skewness is {skew_val:.3f} ({skew_desc}).
+  {kurt_note} The dashed red line marks the empirical 95% VaR.
 </div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -629,15 +697,18 @@ with dd3:
       <div class="kpi-sub">First date drawdown reached 0</div>
     </div>""", unsafe_allow_html=True)
 
+recovery_str = (
+    'The portfolio subsequently recovered to a new high by ' + recovery_date.strftime('%B %d, %Y') + '.'
+    if recovery_date else
+    'The portfolio had not fully recovered to its prior peak within the analysis window.'
+)
 st.markdown(f"""<div class="fig-caption">
   <b>Figure 4.</b> Portfolio drawdown expressed as percentage decline from the rolling peak.
   The maximum drawdown of {max_dd:.2%} reached its trough on {trough_date.strftime('%B %d, %Y')},
-  following a peak on {peak_date.strftime('%B %d, %Y')}.
-  {'The portfolio subsequently recovered to a new high by ' + recovery_date.strftime('%B %d, %Y') + '.' if recovery_date
-   else 'The portfolio had not fully recovered to its prior peak within the analysis window.'}
-  Drawdown is computed as $(V_t - \\max_{{s \\leq t}} V_s) / \\max_{{s \\leq t}} V_s$, where $V_t$
-  is the cumulative return index.
+  following a peak on {peak_date.strftime('%B %d, %Y')}. {recovery_str}
+  Drawdown at time t is the percentage below the prior running maximum, as defined below.
 </div>""", unsafe_allow_html=True)
+st.latex(r"D_t = \frac{V_t - \max_{s \leq t} V_s}{\max_{s \leq t} V_s}")
 
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 8 — ROLLING RISK METRICS
@@ -725,7 +796,8 @@ fig_rb.add_hline(y=beta, line_dash="dot", line_color=BLUE, line_width=1.5,
                  annotation_font=dict(size=10, color=BLUE),
                  annotation_position="bottom right")
 fig_rb.update_layout(
-    **BASE, height=280,
+    **{**BASE, "margin": dict(l=70, r=20, t=20, b=8)},
+    height=280,
     xaxis=dict(**ax("Date")),
     yaxis=dict(**ax("Beta vs. S&P 500")),
     showlegend=False,
@@ -745,24 +817,29 @@ st.markdown('<div class="sec-header">9. Value at Risk: historical vs. parametric
 
 var_data = {
     "Method": ["Historical (empirical)", "Parametric (Gaussian)"],
-    "VaR 95%": [f"{abs(var_hist_95):.4%}", f"{abs(var_param_95):.4%}"],
-    "VaR 99%": [f"{abs(var_hist_99):.4%}", f"{abs(var_param_99):.4%}"],
+    "VaR 95%": [f"{abs(var_hist_95):.2%}", f"{abs(var_param_95):.2%}"],
+    "VaR 99%": [f"{abs(var_hist_99):.2%}", f"{abs(var_param_99):.2%}"],
     "Assumption": ["No distributional assumption; uses empirical return percentiles",
                    "Returns are normally distributed with sample mean and std dev"],
 }
 st.dataframe(pd.DataFrame(var_data), use_container_width=True, hide_index=True)
 
 hist_param_diff = abs(var_hist_95) - abs(var_param_95)
+tail_note = (
+    f"The historical estimate exceeds the parametric estimate at 95% by "
+    f"{abs(hist_param_diff):.2%}, suggesting the empirical distribution has "
+    f"fatter left tails than a normal distribution predicts."
+    if hist_param_diff > 0 else
+    "The parametric estimate exceeds the historical at 95%, suggesting the "
+    "empirical distribution is somewhat thinner-tailed than Gaussian."
+)
 st.markdown(f"""<div class="fig-caption">
   <b>Table 4.</b> Comparison of historical and parametric VaR at 95% and 99% confidence levels.
-  Historical VaR uses the empirical {5}th and {1}st percentiles directly from the return series.
-  Parametric VaR uses the Gaussian quantile formula: $\\text{{VaR}} = -(\\mu - z_\\alpha \\sigma)$
-  where $z_{{0.95}} = 1.645$ and $z_{{0.99}} = 2.326$.
-  {'The historical estimate exceeds the parametric estimate at 95% by ' + f'{abs(hist_param_diff):.4%}' +
-   ', suggesting the empirical distribution has fatter left tails than a normal distribution would predict.'
-   if hist_param_diff > 0 else
-   'The parametric estimate exceeds the historical at 95%, suggesting the empirical distribution is somewhat thinner-tailed than Gaussian.'}
+  Historical VaR uses the empirical 5th and 1st percentiles directly from the return series.
+  Parametric VaR uses the Gaussian quantile formula shown below, where
+  z(0.95) = 1.645 and z(0.99) = 2.326. {tail_note}
 </div>""", unsafe_allow_html=True)
+st.latex(r"\text{VaR}_\alpha = -(\mu - z_\alpha \, \sigma)")
 
 # ══════════════════════════════════════════════════════════════════════════
 # SECTION 10 — INDIVIDUAL ASSET RISK
@@ -812,12 +889,14 @@ top_rc = tickers_in[np.argmax(pct_rc)]
 st.markdown(f"""<div class="fig-caption">
   <b>Figure 8.</b> Component variance contribution of each position, expressed as a percentage
   of total portfolio variance. Component contribution is computed as
-  $RC_i = w_i (\\Sigma w)_i / w^T \\Sigma w$, accounting for each asset's weight, own volatility,
-  and correlation with all other positions. The dashed line marks the equal-contribution threshold
-  of {100/n_assets:.1f}%. {NAMES.get(top_rc, top_rc)} is the largest single contributor to
-  portfolio variance; positions above the dashed line are overweight from a risk perspective
+  RC_i = w_i * (Sigma * w)_i / (w^T * Sigma * w),
+  accounting for each asset's weight, own volatility, and correlation with all other positions.
+  The dashed line marks the equal-contribution threshold of {100/n_assets:.1f}%.
+  {NAMES.get(top_rc, top_rc)} is the largest single contributor to portfolio variance;
+  positions above the dashed line are overweight from a risk perspective
   relative to their capital allocation.
 </div>""", unsafe_allow_html=True)
+st.latex(r"RC_i = \frac{w_i \, (\Sigma \mathbf{w})_i}{\mathbf{w}^T \Sigma \mathbf{w}}")
 
 # ══════════════════════════════════════════════════════════════════════════
 # FOOTER
@@ -826,7 +905,7 @@ st.markdown(f"""<div class="paper-footer">
   Data: Yahoo Finance daily adjusted closing prices, {start_date.strftime('%Y-%m-%d')} to
   {end_date.strftime('%Y-%m-%d')}. Risk-free rate: 2.00% annualized (constant).
   Annualized figures use a 252 trading-day convention.
-  Beta estimated by OLS: $r_p = \\alpha + \\beta r_m + \\varepsilon$.
+  Beta estimated by OLS: r_p = alpha + beta * r_m + epsilon.
   VaR figures are 1-day estimates. Rolling window: {roll_win} trading days.
   This dashboard is for analytical and educational purposes only and does not constitute
   investment advice.
