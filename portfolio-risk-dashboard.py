@@ -1504,11 +1504,11 @@ if scenario_rows:
     ))
     fig_stress.add_hline(y=0, line_color="#d4c9b8", line_width=1)
     fig_stress.update_layout(
-        **layout(margin=dict(l=8, r=20, t=30, b=120), height=440, barmode="group"),
+        **layout(margin=dict(l=8, r=20, t=30, b=120), height=440, barmode="group",
+                 legend=dict(orientation="h", y=1.05, x=0, font=dict(size=11), bgcolor="rgba(0,0,0,0)")),
         xaxis=dict(**ax_bare(""), tickangle=-30,
                    **AXIS_STYLE_NOGRID),
         yaxis=dict(**ax("Model-implied portfolio return (%)"), ticksuffix="%"),
-        legend=dict(orientation="h", y=1.05, x=0, font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig_stress, use_container_width=True)
 
