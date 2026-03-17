@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
+# plotly.figure_factory imported but not used — removed
 import yfinance as yf
 from datetime import datetime, timedelta
 from scipy.optimize import minimize
-from scipy.stats import norm
+import math
 import io, warnings
 warnings.filterwarnings("ignore")
 
@@ -180,6 +180,12 @@ LEGEND   = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                 font=dict(size=11, color="#1a1a1a"), bgcolor="rgba(0,0,0,0)")
 BASE     = dict(plot_bgcolor=CHART_BG, paper_bgcolor=CHART_BG, font=FONT_CH,
                 margin=dict(l=8, r=8, t=20, b=8), legend=LEGEND)
+
+def layout(**overrides):
+    """Return a copy of BASE with overrides applied. Py3.8-safe alternative to {**BASE, k:v}."""
+    d = dict(BASE)
+    d.update(overrides)
+    return d
 
 BLUE   = "#1a4f82"; LBLUE  = "#3d7ab5"; LLBLUE = "#b8cfe0"
 GREEN  = "#2e7d4f"; LGREEN = "#6ab06a"; LLGREEN = "#c8e6c9"
@@ -435,8 +441,7 @@ with bar_col:
                         annotation_text=f"Equal weight ({equal_w:.1f}%)",
                         annotation_font=dict(size=9, color=GRAY), annotation_position="top right")
     fig_alloc.update_layout(
-        **{**BASE, "margin": dict(l=8, r=55, t=10, b=8)},
-        height=max(320, n_assets*22),
+        **layout(margin=dict(l=8, r=55, t=10, b=8), height=max(320, n_assets*22)),
         xaxis=dict(**ax("Normalized weight (%)"), ticksuffix="%"),
         yaxis=dict(tickfont=dict(size=10, color="#444"), showgrid=False,
                    linecolor="#d4c9b8", linewidth=1, autorange="reversed"),
@@ -481,8 +486,8 @@ z95, z99     = 1.6449, 2.3263
 var_param_95 = mu_daily - z95*sig_daily
 var_param_99 = mu_daily - z99*sig_daily
 # Parametric CVaR
-cvar_param_95 = mu_daily - sig_daily * norm.pdf(z95) / (1 - 0.95)
-cvar_param_99 = mu_daily - sig_daily * norm.pdf(z99) / (1 - 0.99)
+cvar_param_95 = mu_daily - sig_daily * (math.exp(-0.5*z95**2) / math.sqrt(2*math.pi)) / (1 - 0.95)
+cvar_param_99 = mu_daily - sig_daily * (math.exp(-0.5*z99**2) / math.sqrt(2*math.pi)) / (1 - 0.99)
 
 bench_aligned = bench_returns.reindex(port_returns.index).dropna()
 port_aligned  = port_returns.reindex(bench_aligned.index)
@@ -648,7 +653,7 @@ fig_corr = go.Figure(go.Heatmap(
     hovertemplate="%{y} / %{x}: %{z:.3f}<extra></extra>", showscale=True,
 ))
 fig_corr.update_layout(
-    **{**BASE, "margin": dict(l=8, r=60, t=20, b=8)}, height=420,
+    **layout(margin=dict(l=8, r=60, t=20, b=8), height=420),
     xaxis=dict(tickfont=dict(size=10, color="#444"), showgrid=False,
                linecolor="#d4c9b8", linewidth=1),
     yaxis=dict(tickfont=dict(size=10, color="#444"), showgrid=False,
@@ -838,10 +843,11 @@ with rc1:
         mode="lines", name="S&P 500", line=dict(color=GRAY, width=1.5, dash="dash"),
         hovertemplate="Date: %{x|%Y-%m-%d}<br>S&P 500: %{y:.2f}%<extra></extra>"))
     fig_rv.update_layout(
-        **{**BASE, "margin": dict(l=60, r=8, t=20, b=8)}, height=280,
-        xaxis=dict(**ax("Date")),
-        yaxis=dict(**ax("Annualized volatility (%)"), ticksuffix="%"),
+        **layout(margin=dict(l=60, r=8, t=20, b=8), height=280,
+                 xaxis=dict(**ax("Date")),
+                 yaxis=dict(**ax("Annualized volatility (%)"), ticksuffix="%"))
     )
+    
     st.plotly_chart(fig_rv, use_container_width=True)
     st.markdown("""<div class="fig-caption">
       <b>Figure 5.</b> 60-day rolling annualized volatility vs. S&P 500.
@@ -857,9 +863,10 @@ with rc2:
                      annotation_text="Sharpe = 1",
                      annotation_font=dict(size=9, color=GRAY))
     fig_rs.update_layout(
-        **{**BASE, "margin": dict(l=60, r=8, t=20, b=8)}, height=280,
-        xaxis=dict(**ax("Date")),
-        yaxis=dict(**ax("Sharpe ratio (annualized)")), showlegend=False,
+        **layout(margin=dict(l=60, r=8, t=20, b=8), height=280,
+                 xaxis=dict(**ax("Date")),
+                 yaxis=dict(**ax("Sharpe ratio (annualized)")),
+                 showlegend=False),
     )
     st.plotly_chart(fig_rs, use_container_width=True)
     st.markdown("""<div class="fig-caption">
@@ -877,9 +884,10 @@ fig_rb.add_hline(y=beta, line_dash="dot", line_color=BLUE, line_width=1.5,
                  annotation_text=f"Full-period beta ({beta:.2f})",
                  annotation_font=dict(size=10, color=BLUE), annotation_position="bottom right")
 fig_rb.update_layout(
-    **{**BASE, "margin": dict(l=70, r=20, t=20, b=8)}, height=280,
-    xaxis=dict(**ax("Date")),
-    yaxis=dict(**ax("Beta vs. S&P 500")), showlegend=False,
+    **layout(margin=dict(l=70, r=20, t=20, b=8), height=280,
+             xaxis=dict(**ax("Date")),
+             yaxis=dict(**ax("Beta vs. S&P 500")),
+             showlegend=False),
 )
 st.plotly_chart(fig_rb, use_container_width=True)
 st.markdown(f"""<div class="fig-caption">
@@ -958,7 +966,7 @@ fig_rc.add_hline(y=100/n_assets, line_dash="dot", line_color=GRAY, line_width=1.
                  annotation_text=f"Equal contribution ({100/n_assets:.1f}%)",
                  annotation_font=dict(size=9, color=GRAY), annotation_position="top right")
 fig_rc.update_layout(
-    **{**BASE, "margin": dict(l=8, r=120, t=20, b=8)}, height=320,
+    **layout(margin=dict(l=8, r=120, t=20, b=8), height=320),
     xaxis={**ax("Asset"), "tickangle": -35},
     yaxis=dict(**ax("% contribution to portfolio variance"), ticksuffix="%"),
     showlegend=False,
@@ -1034,7 +1042,7 @@ if ff3_loaded:
     ))
     fig_ff.add_hline(y=0, line_color="#d4c9b8", line_width=1)
     fig_ff.update_layout(
-        **{**BASE, "margin": dict(l=60, r=20, t=30, b=8)}, height=300,
+        **layout(margin=dict(l=60, r=20, t=30, b=8), height=300),
         xaxis=dict(**ax("Factor", grid=False)),
         yaxis={**ax("Factor loading (beta)"),
                "zeroline": True, "zerolinecolor": "#d4c9b8", "zerolinewidth": 1},
@@ -1065,10 +1073,10 @@ if ff3_loaded:
         ))
         fig_rfa.add_hline(y=0, line_dash="dot", line_color=GRAY, line_width=1)
         fig_rfa.update_layout(
-            **{**BASE, "margin": dict(l=70, r=20, t=20, b=8)}, height=260,
-            xaxis=dict(**ax("Date")),
-            yaxis=dict(**ax("Annualized FF alpha (%)"), ticksuffix="%"),
-            showlegend=False,
+            **layout(margin=dict(l=70, r=20, t=20, b=8), height=260,
+                     xaxis=dict(**ax("Date")),
+                     yaxis=dict(**ax("Annualized FF alpha (%)"), ticksuffix="%"),
+                     showlegend=False),
         )
         st.plotly_chart(fig_rfa, use_container_width=True)
 
@@ -1157,7 +1165,6 @@ ret_ms, vol_ms = port_stats(w_ms)
 sharpe_ms = (ret_ms - RF_ANNUAL) / vol_ms
 
 # Risk parity portfolio
-@st.cache_data(show_spinner=False)
 def risk_parity_weights(cov_arr, n):
     def rp_obj(w):
         w = np.array(w)
@@ -1236,10 +1243,10 @@ for (rx, vx, label, color, sym, sz) in [
     ))
 
 fig_ef.update_layout(
-    **{**BASE, "margin": dict(l=60, r=20, t=30, b=8),
-       "legend": dict(orientation="v", x=0.01, y=0.99, xanchor="left", yanchor="top",
-                      font=dict(size=11, color="#1a1a1a"), bgcolor="rgba(245,240,232,0.85)",
-                      bordercolor="#d4c9b8", borderwidth=0.75)},
+    **layout(margin=dict(l=60, r=20, t=30, b=8),
+       legend=dict(orientation="v", x=0.01, y=0.99, xanchor="left", yanchor="top",
+                   font=dict(size=11, color="#1a1a1a"), bgcolor="rgba(245,240,232,0.85)",
+                   bordercolor="#d4c9b8", borderwidth=0.75)),
     height=460,
     xaxis=dict(**ax("Annualized volatility"), tickformat=".0%"),
     yaxis=dict(**ax("Annualized expected return"), tickformat=".0%"),
@@ -1346,7 +1353,11 @@ st.markdown("""<div class="explainer-body">
 def get_spx_scenario_returns(spx_prices, scenarios):
     """Compute S&P 500 return during each scenario window."""
     results = {}
-    spx_ret = spx_prices[BENCHMARK].pct_change().dropna()
+    # yfinance may return a MultiIndex or simple DataFrame for single ticker
+    if isinstance(spx_prices.columns, pd.MultiIndex):
+        spx_prices = spx_prices.droplevel(1, axis=1)
+    spx_col = BENCHMARK if BENCHMARK in spx_prices.columns else spx_prices.columns[0]
+    spx_ret = spx_prices[spx_col].pct_change().dropna()
     for name, (start_str, end_str) in scenarios.items():
         try:
             slc = spx_ret.loc[start_str:end_str]
@@ -1470,11 +1481,9 @@ if scenario_rows:
     ))
     fig_stress.add_hline(y=0, line_color="#d4c9b8", line_width=1)
     fig_stress.update_layout(
-        **{**BASE, "margin": dict(l=8, r=20, t=30, b=120)},
-        height=440, barmode="group",
-        xaxis=dict(title="", tickangle=-30, tickfont=dict(size=10, color="#444"),
-                   showgrid=False, linecolor="#d4c9b8", linewidth=1,
-                   ticks="outside", ticklen=3, showline=True),
+        **layout(margin=dict(l=8, r=20, t=30, b=120), height=440, barmode="group"),
+        xaxis=dict(**ax(""), tickangle=-30, tickfont=dict(size=10, color="#444"),
+                   showgrid=False, linecolor="#d4c9b8", linewidth=1),
         yaxis=dict(**ax("Model-implied portfolio return (%)"), ticksuffix="%"),
         legend=dict(orientation="h", y=1.05, x=0, font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
     )
@@ -1578,7 +1587,7 @@ fig_regime.add_hline(
     annotation_font=dict(size=9, color=GOLD), annotation_position="top right",
 )
 fig_regime.update_layout(
-    **{**BASE, "margin": dict(l=70, r=20, t=20, b=8)}, height=300,
+    **layout(margin=dict(l=70, r=20, t=20, b=8), height=300),
     xaxis=dict(**ax("Date")),
     yaxis=dict(**ax("20-day rolling volatility (annualized %)"), ticksuffix="%"),
 )
@@ -1652,7 +1661,7 @@ if len(low_returns) > 5 and len(high_returns) > 5:
         ))
     fig_rr.add_vline(x=0, line_dash="dot", line_color=GRAY, line_width=1)
     fig_rr.update_layout(
-        **{**BASE, "margin": dict(l=8, r=8, t=20, b=8)}, height=260,
+        **layout(margin=dict(l=8, r=8, t=20, b=8), height=260),
         xaxis=dict(**ax("Daily return"), tickformat=".1%"),
         yaxis=dict(**ax("Density")),
     )
