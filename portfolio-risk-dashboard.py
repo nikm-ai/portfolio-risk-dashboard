@@ -300,14 +300,24 @@ weights = weight_arr / weight_arr.sum()
 # ══════════════════════════════════════════════════════════════════════════
 # CORE CALCULATIONS
 # ══════════════════════════════════════════════════════════════════════════
-port_returns  = numeric_df.dot(weights)
+# Drop any rows with NaN before computing portfolio returns —
+# yfinance occasionally returns sparse data for individual tickers
+clean_df     = numeric_df.dropna()
+if clean_df.shape[0] < 30:
+    st.error("Insufficient clean data (fewer than 30 trading days). Check the tickers or upload a complete dataset.")
+    st.stop()
+
+port_returns  = clean_df.dot(weights)
 rf_daily      = 0.02 / 252
-cov_matrix    = numeric_df.cov() * 252
+cov_matrix    = clean_df.cov() * 252
 port_vol      = np.sqrt(weights @ cov_matrix.values @ weights)
 excess        = port_returns - rf_daily
 sharpe        = (excess.mean() / excess.std()) * np.sqrt(252)
-var_hist_95   = np.percentile(port_returns, 5)
-var_hist_99   = np.percentile(port_returns, 1)
+
+# Drop any remaining NaNs before percentile (safety guard)
+pr_clean      = port_returns.dropna().values
+var_hist_95   = np.percentile(pr_clean, 5)
+var_hist_99   = np.percentile(pr_clean, 1)
 
 # Parametric VaR (Gaussian)
 mu_daily      = port_returns.mean()
@@ -424,7 +434,7 @@ st.markdown(f"""<div class="fig-caption" style="margin-top:0.75rem;">
 # ══════════════════════════════════════════════════════════════════════════
 st.markdown('<div class="sec-header">4. Correlation matrix</div>', unsafe_allow_html=True)
 
-corr = numeric_df.corr()
+corr = clean_df.corr()
 # Rename to short tickers for heatmap readability
 corr_display = corr.copy()
 
@@ -760,7 +770,7 @@ st.markdown(f"""<div class="fig-caption">
 st.markdown('<div class="sec-header">10. Individual asset risk contribution</div>', unsafe_allow_html=True)
 
 # Marginal and component risk contribution
-asset_vols   = numeric_df.std() * np.sqrt(252)
+asset_vols   = clean_df.std() * np.sqrt(252)
 marginal_rc  = cov_matrix.values @ weights
 component_rc = marginal_rc * weights
 total_risk_sq = weights @ cov_matrix.values @ weights
