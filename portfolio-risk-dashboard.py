@@ -461,7 +461,7 @@ calmar = (total_ret / abs(max_dd)) if max_dd != 0 else np.nan
 # PORTFOLIO SUMMARY
 # ══════════════════════════════════════════════════════════════════════════
 port_ret_ann = port_returns.mean() * 252
-excess_ret   = port_ret_ann - bench_ret_ann
+excess_ret   = total_ret - bench_total_ret
 alpha_str    = sgn(alpha_ann)
 sharpe_diff  = sharpe - bench_sharpe
 vol_diff     = port_vol - bench_vol
