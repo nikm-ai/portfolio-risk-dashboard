@@ -198,6 +198,10 @@ RF_ANNUAL = 0.02
 RF_DAILY  = RF_ANNUAL / 252
 
 def ax(title="", grid=True, pct=False, suffix=""):
+    """Return a complete Plotly axis dict. Safe to use with dict(**ax(...))
+    as long as you don't re-specify any of its keys in the same dict() call.
+    Keys returned: title, tickfont, gridcolor, linecolor, linewidth, showline,
+    showgrid, zeroline, ticks, ticklen. Optional: tickformat, ticksuffix."""
     d = dict(
         title=dict(text=title, font=dict(size=11, color="#555555")),
         tickfont=dict(size=11, color="#444444"),
@@ -210,6 +214,23 @@ def ax(title="", grid=True, pct=False, suffix=""):
     if suffix:
         d["ticksuffix"] = suffix
     return d
+
+def ax_bare(title=""):
+    """Return ONLY title+tickfont. Use when you need to add other axis keys
+    manually without risk of duplicate-key conflicts."""
+    return dict(
+        title=dict(text=title, font=dict(size=11, color="#555555")),
+        tickfont=dict(size=11, color="#444444"),
+    )
+
+AXIS_STYLE = dict(
+    gridcolor="#e8e0d0", linecolor="#d4c9b8", linewidth=1,
+    showline=True, showgrid=True, zeroline=False, ticks="outside", ticklen=3,
+)
+AXIS_STYLE_NOGRID = dict(
+    gridcolor="rgba(0,0,0,0)", linecolor="#d4c9b8", linewidth=1,
+    showline=True, showgrid=False, zeroline=False, ticks="outside", ticklen=3,
+)
 
 def fmt_pct(v, d=2): return f"{v:.{d}%}"
 def fmt_f(v, d=2):   return f"{v:.{d}f}"
@@ -1044,8 +1065,10 @@ if ff3_loaded:
     fig_ff.update_layout(
         **layout(margin=dict(l=60, r=20, t=30, b=8), height=300),
         xaxis=dict(**ax("Factor", grid=False)),
-        yaxis={**ax("Factor loading (beta)"),
-               "zeroline": True, "zerolinecolor": "#d4c9b8", "zerolinewidth": 1},
+        yaxis=dict(**ax_bare("Factor loading (beta)"),
+                   gridcolor="#e8e0d0", linecolor="#d4c9b8", linewidth=1,
+                   showline=True, showgrid=True, zeroline=True,
+                   zerolinecolor="#d4c9b8", ticks="outside", ticklen=3),
         showlegend=False,
     )
     st.plotly_chart(fig_ff, use_container_width=True)
@@ -1482,9 +1505,8 @@ if scenario_rows:
     fig_stress.add_hline(y=0, line_color="#d4c9b8", line_width=1)
     fig_stress.update_layout(
         **layout(margin=dict(l=8, r=20, t=30, b=120), height=440, barmode="group"),
-        xaxis=dict(title="", tickangle=-30, tickfont=dict(size=10, color="#444"),
-                   showgrid=False, linecolor="#d4c9b8", linewidth=1,
-                   ticks="outside", ticklen=3, showline=True),
+        xaxis=dict(**ax_bare(""), tickangle=-30,
+                   **AXIS_STYLE_NOGRID),
         yaxis=dict(**ax("Model-implied portfolio return (%)"), ticksuffix="%"),
         legend=dict(orientation="h", y=1.05, x=0, font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
     )
