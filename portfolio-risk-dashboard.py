@@ -329,8 +329,8 @@ var_param_99  = mu_daily - z99 * sig_daily
 # Beta and CAPM alpha (OLS: r_p = alpha + beta * r_m + e)
 bench_aligned = bench_returns.reindex(port_returns.index).dropna()
 port_aligned  = port_returns.reindex(bench_aligned.index)
-cov_pm        = np.cov(port_aligned, bench_aligned)[0, 1]
-var_m         = np.var(bench_aligned)
+cov_pm        = np.cov(port_aligned.values, bench_aligned.values)[0, 1]
+var_m         = np.var(bench_aligned.values)
 beta          = cov_pm / var_m if var_m > 0 else np.nan
 rf_ann        = 0.02
 alpha_ann     = ((port_aligned.mean() - rf_daily) - beta * (bench_aligned.mean() - rf_daily)) * 252
@@ -802,7 +802,7 @@ fig_rc.add_hline(y=100/n_assets, line_dash="dot", line_color=GRAY, line_width=1.
                  annotation_position="top right")
 fig_rc.update_layout(
     **BASE, height=320,
-    xaxis=dict(**ax("Asset"), tickangle=-35, tickfont=dict(size=10)),
+    xaxis={**ax("Asset"), "tickangle": -35},
     yaxis=dict(**ax("% contribution to portfolio variance"), ticksuffix="%"),
     showlegend=False,
 )
