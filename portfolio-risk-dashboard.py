@@ -311,7 +311,7 @@ st.markdown("""
     and maximum-Sharpe optimal portfolios relative to the equal-weight baseline. Section 13
     stress-tests the portfolio against six named historical market dislocations. Section 14
     detects high- and low-volatility regimes via a rolling HMM-inspired threshold approach.
-    A plain-language methodology appendix defines every metric for non-technical audiences.
+    A plain-language methodology appendix defines every metric.
   </div>
 </div>
 """, unsafe_allow_html=True)
