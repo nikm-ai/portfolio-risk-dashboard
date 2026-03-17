@@ -983,8 +983,8 @@ if ff3 is not None and not ff3.empty:
     fig_ff.update_layout(
         **{**BASE, "margin": dict(l=60, r=20, t=30, b=8)}, height=300,
         xaxis=dict(**ax("Factor", grid=False)),
-        yaxis=dict(**ax("Factor loading (beta)"), zeroline=True,
-                   zerolinecolor="#d4c9b8", zerolinewidth=1),
+        yaxis={**ax("Factor loading (beta)"),
+               "zeroline": True, "zerolinecolor": "#d4c9b8", "zerolinewidth": 1},
         showlegend=False,
     )
     st.plotly_chart(fig_ff, use_container_width=True)
