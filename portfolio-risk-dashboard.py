@@ -1472,8 +1472,9 @@ if scenario_rows:
     fig_stress.update_layout(
         **{**BASE, "margin": dict(l=8, r=20, t=30, b=120)},
         height=440, barmode="group",
-        xaxis=dict(**ax(""), tickangle=-30, tickfont=dict(size=10, color="#444"),
-                   showgrid=False, linecolor="#d4c9b8", linewidth=1),
+        xaxis=dict(title="", tickangle=-30, tickfont=dict(size=10, color="#444"),
+                   showgrid=False, linecolor="#d4c9b8", linewidth=1,
+                   ticks="outside", ticklen=3, showline=True),
         yaxis=dict(**ax("Model-implied portfolio return (%)"), ticksuffix="%"),
         legend=dict(orientation="h", y=1.05, x=0, font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
     )
